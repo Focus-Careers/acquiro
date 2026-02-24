@@ -1,12 +1,12 @@
 import { motion } from 'framer-motion';
-import { Phone } from 'lucide-react';
+import { Phone, MessageSquare } from 'lucide-react';
 
 interface ChatActionButtonsProps {
   onCall: () => void;
   onMessage: () => void;
 }
 
-export function ChatActionButtons({ onCall, onMessage: _onMessage }: ChatActionButtonsProps) {
+export function ChatActionButtons({ onCall, onMessage }: ChatActionButtonsProps) {
   const buttons = [
     {
       id: 'call',
@@ -14,13 +14,12 @@ export function ChatActionButtons({ onCall, onMessage: _onMessage }: ChatActionB
       icon: Phone,
       onClick: onCall,
     },
-    // "Let's Message Here" hidden for now – will re-enable later
-    // {
-    //   id: 'message',
-    //   label: "Let's Message Here",
-    //   icon: MessageSquare,
-    //   onClick: onMessage,
-    // },
+    {
+      id: 'message',
+      label: "Let's Message Here",
+      icon: MessageSquare,
+      onClick: onMessage,
+    },
   ];
 
   return (

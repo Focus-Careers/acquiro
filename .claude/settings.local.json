@@ -10,7 +10,20 @@
       "WebFetch(domain:stackoverflow.com)",
       "WebSearch",
       "WebFetch(domain:echolaketech.com)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(node:*)",
+      "Bash(curl:*)",
+      "Bash(git add:*)",
+      "Bash(find /c/Users/toby/documents/GitHub/acquiro-scraper -maxdepth 3 -type f \\\\\\( -name \"*.js\" -o -name \"*.ts\" \\\\\\) ! -path \"*/node_modules/*\" ! -path \"*/.claude/*\" 2>/dev/null | sort)",
+      "Bash(find /c/Users/toby/documents/GitHub/acquiro/server -type f -name \"*.js\" -o -name \"*.ts\" 2>/dev/null | head -50)",
+      "Bash(find /c/Users/toby/documents/GitHub/acquiro -path \"*/node_modules\" -prune -o -type f \\\\\\( -name \"*.js\" -o -name \"*.ts\" \\\\\\) -print 2>/dev/null | grep -v node_modules)",
+      "Bash(git log:*)",
+      "Bash(for branch:*)",
+      "Bash(git push:*)",
+      "Bash(find /c/Users/toby/Documents/GitHub/acquiro/server -name *.env* -o -name .env*)",
+      "Bash(git -C C:/Users/toby/Documents/GitHub/acquiro-scraper log --oneline)",
+      "Bash(npm install *)",
+      "Bash(netstat -ano)"
     ]
   }
 }

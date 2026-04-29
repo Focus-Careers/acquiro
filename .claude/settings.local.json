@@ -14,7 +14,11 @@
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(npm show *)",
+      "Bash(node -e \"const v=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\);const arr=JSON.parse\\(v\\);console.log\\('Latest versions:',arr.slice\\(-5\\).join\\(', '\\)\\)\")",
+      "Bash(npm install *)",
+      "Bash(npm run *)"
     ]
   }
 }

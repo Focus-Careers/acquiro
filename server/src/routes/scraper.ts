@@ -8,7 +8,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { requireAdmin } from '../middleware/requireAuth.js';
+import { requireAdmin, requireAuth } from '../middleware/requireAuth.js';
 
 const router = Router();
 
@@ -84,5 +84,37 @@ router.get('/feature-announcements', requireAdmin, (req, res) => proxyToScraper(
 router.post('/feature-announcements', requireAdmin, (req, res) => proxyToScraper(req, res, '/admin/feature-announcements'));
 router.patch('/feature-announcements/:id', requireAdmin, (req, res) => proxyToScraper(req, res, `/admin/feature-announcements/${req.params.id}`, 'PATCH'));
 router.get('/feature-announcements/:id/stats', requireAdmin, (req, res) => proxyToScraper(req, res, `/admin/feature-announcements/${req.params.id}/stats`, 'GET'));
+
+// ── NDA upload (user-facing, not admin) ──────────────────────────────────────
+// Any authenticated user can upload their own signed NDA.
+// We proxy the multipart request through, forwarding the raw body and
+// Content-Type (including the multipart boundary) to the scraper.
+
+router.post('/outreach/:outreachId/signed-nda', requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const base = getScraperBase();
+  const { outreachId } = req.params;
+
+  // Collect the raw request body chunks and forward with original Content-Type
+  const chunks: Buffer[] = [];
+  await new Promise<void>((resolve, reject) => {
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('end', resolve);
+    req.on('error', reject);
+  });
+  const body = Buffer.concat(chunks);
+
+  const upstream = await fetch(`${base}/user/outreach/${outreachId}/signed-nda`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${getScraperKey()}`,
+      // Forward Content-Type so the scraper sees the correct multipart boundary
+      'Content-Type': req.headers['content-type'] ?? 'application/octet-stream',
+    },
+    body,
+  });
+
+  const text = await upstream.text();
+  res.status(upstream.status).set('Content-Type', 'application/json').send(text);
+});
 
 export default router;

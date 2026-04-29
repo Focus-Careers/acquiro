@@ -2,6 +2,13 @@ import { Router, Request, Response } from 'express';
 
 const router = Router();
 
+// Models this proxy is allowed to call. Prevents callers from requesting
+// expensive models (e.g. o1, gpt-4-turbo) and draining OpenAI quota.
+const ALLOWED_MODELS = new Set([
+  'gpt-4o-mini',
+  'gpt-4o',
+]);
+
 /**
  * POST /api/openai/stream
  *
@@ -14,6 +21,13 @@ router.post('/stream', async (req: Request, res: Response): Promise<void> => {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     res.status(500).json({ error: 'OpenAI not configured on server' });
+    return;
+  }
+
+  // Enforce model allowlist — reject anything outside the approved set
+  const requestedModel = req.body?.model as string | undefined;
+  if (!requestedModel || !ALLOWED_MODELS.has(requestedModel)) {
+    res.status(400).json({ error: `Model not allowed. Permitted: ${[...ALLOWED_MODELS].join(', ')}` });
     return;
   }
 

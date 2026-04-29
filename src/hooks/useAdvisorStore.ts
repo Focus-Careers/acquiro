@@ -292,16 +292,6 @@ export const useAdvisorStore = create<AdvisorStore>()(
   },
   
   activateAdvisor: () => {
-    const state = get();
-    console.log('=== Agent Created - Current States ===');
-    console.log('Config:', state.config);
-    console.log('Advisor Name:', state.config.advisorName);
-    console.log('User Name:', state.userName);
-    console.log('User Email:', state.userEmail);
-    console.log('Current Step:', state.currentStep);
-    console.log('Is Complete:', state.isComplete);
-    console.log('Full State:', state);
-    console.log('======================================');
     set({ isActivated: true });
   },
   

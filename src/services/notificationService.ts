@@ -1,7 +1,5 @@
-import { API_URL } from '../utils/apiUrl';
 import { getAuthHeaders } from '../utils/authHeaders';
-
-const SCRAPER_BASE = import.meta.env.VITE_SCRAPER_URL as string;
+import { API_URL } from '../utils/apiUrl';
 
 export interface UserNotification {
   id: string;
@@ -40,8 +38,14 @@ export async function uploadSignedNDA(outreachId: string, file: File): Promise<v
   const formData = new FormData();
   formData.append('file', file);
 
-  const res = await fetch(`${SCRAPER_BASE}/user/outreach/${outreachId}/signed-nda`, {
+  // Auth header only (no Content-Type — browser sets it with multipart boundary automatically)
+  const token = (await import('../hooks/useAdvisorStore')).useAdvisorStore.getState().authToken;
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_URL}/api/scraper/outreach/${outreachId}/signed-nda`, {
     method: 'POST',
+    headers,
     body: formData,
   });
   if (!res.ok) throw new Error(`Failed to upload signed NDA: ${res.status}`);

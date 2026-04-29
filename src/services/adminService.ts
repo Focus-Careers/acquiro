@@ -1,4 +1,5 @@
 import { API_URL } from '../utils/apiUrl';
+import { getAuthHeaders } from '../utils/authHeaders';
 
 /**
  * GET /get_admin_stats → { total_users, active_subscribers, churned_users, ... }
@@ -24,7 +25,7 @@ export interface AdminStatsResponse {
  * Bubble endpoint: GET (or POST) /get_admin_stats — must return total_users, active_subscribers, churned_users.
  */
 export async function getAdminStats(): Promise<AdminStatsResponse> {
-  const res = await fetch(`${API_URL}/api/bubble/admin/stats`);
+  const res = await fetch(`${API_URL}/api/bubble/admin/stats`, { headers: getAuthHeaders() });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Admin get_stats failed: ${res.status} ${text}`);
@@ -90,7 +91,7 @@ async function fetchAllListings(onProgress?: (loaded: number, total: number) => 
   let cursor = 0;
   let knownTotal: number | null = null;
   while (true) {
-    const res = await fetch(`${API_URL}/api/bubble/listings?limit=100&cursor=${cursor}`);
+    const res = await fetch(`${API_URL}/api/bubble/listings?limit=100&cursor=${cursor}`, { headers: getAuthHeaders() });
     if (!res.ok) throw new Error(`Listings fetch failed: ${res.status}`);
     const json = (await res.json()) as {
       response: { cursor: number; results: RawListing[]; count: number; remaining: number };
@@ -212,7 +213,7 @@ export interface MrrResponse {
 
 /** Fetches current MRR from our backend (Stripe). */
 export async function getMrr(): Promise<MrrResponse> {
-  const res = await fetch(`${API_URL}/api/admin/mrr`);
+  const res = await fetch(`${API_URL}/api/admin/mrr`, { headers: getAuthHeaders() });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Failed to fetch MRR' }));
     throw new Error(err.error || 'Failed to fetch MRR');
@@ -228,7 +229,7 @@ export interface RevenueResponse {
 
 /** Fetches current MRR and last 6 months revenue from our backend (Stripe invoices + subscriptions). */
 export async function getRevenue(): Promise<RevenueResponse> {
-  const res = await fetch(`${API_URL}/api/admin/revenue`);
+  const res = await fetch(`${API_URL}/api/admin/revenue`, { headers: getAuthHeaders() });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Failed to fetch revenue' }));
     throw new Error(err.error || 'Failed to fetch revenue');
@@ -266,7 +267,7 @@ export async function getConversations(params: {
   if (params.cursor) q.set('cursor', params.cursor);
   if (params.page_size != null) q.set('page_size', String(params.page_size));
   if (params.agent_id) q.set('agent_id', params.agent_id);
-  const res = await fetch(`${API_URL}/api/admin/conversations?${q.toString()}`);
+  const res = await fetch(`${API_URL}/api/admin/conversations?${q.toString()}`, { headers: getAuthHeaders() });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Failed to fetch conversations' }));
     throw new Error(err.error || 'Failed to fetch conversations');
@@ -285,7 +286,7 @@ export interface ConversationDetails {
 
 /** Fetches one conversation (with transcript) from our backend (ElevenLabs proxy). */
 export async function getConversation(conversationId: string): Promise<ConversationDetails> {
-  const res = await fetch(`${API_URL}/api/admin/conversations/${encodeURIComponent(conversationId)}`);
+  const res = await fetch(`${API_URL}/api/admin/conversations/${encodeURIComponent(conversationId)}`, { headers: getAuthHeaders() });
   if (!res.ok) {
     if (res.status === 404) throw new Error('Conversation not found');
     const err = await res.json().catch(() => ({ error: 'Failed to fetch conversation' }));

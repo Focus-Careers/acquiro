@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import Stripe from 'stripe';
+import { requireAdmin } from '../middleware/requireAuth.js';
 
 const router = Router();
 
@@ -21,7 +22,7 @@ function getElevenLabsKey(): string {
  * GET /api/admin/mrr
  * Returns current MRR from Stripe (sum of active subscription amounts, normalized to monthly).
  */
-router.get('/mrr', async (_req: Request, res: Response) => {
+router.get('/mrr', requireAdmin, async (_req: Request, res: Response) => {
   try {
     const stripe = getStripe();
     let totalCents = 0;
@@ -54,7 +55,7 @@ router.get('/mrr', async (_req: Request, res: Response) => {
  * Returns current_mrr (cents) and monthly_revenue for the last 6 months from paid invoices.
  * Monthly revenue: sum of paid invoice amounts grouped by month.
  */
-router.get('/revenue', async (_req: Request, res: Response) => {
+router.get('/revenue', requireAdmin, async (_req: Request, res: Response) => {
   try {
     const stripe = getStripe();
     const now = new Date();
@@ -119,7 +120,7 @@ router.get('/revenue', async (_req: Request, res: Response) => {
  * GET /api/admin/conversations?cursor=&page_size=20&agent_id=
  * Proxies to ElevenLabs Conversational AI API to list conversations.
  */
-router.get('/conversations', async (req: Request, res: Response) => {
+router.get('/conversations', requireAdmin, async (req: Request, res: Response) => {
   try {
     const apiKey = getElevenLabsKey();
     const cursor = req.query.cursor as string | undefined;
@@ -150,7 +151,7 @@ router.get('/conversations', async (req: Request, res: Response) => {
  * GET /api/admin/conversations/:id
  * Proxies to ElevenLabs to get a single conversation (including transcript).
  */
-router.get('/conversations/:id', async (req: Request, res: Response) => {
+router.get('/conversations/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
     const apiKey = getElevenLabsKey();
     const { id } = req.params;

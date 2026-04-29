@@ -10,6 +10,7 @@ import emailRoutes from './routes/email.js';
 import authRoutes from './routes/auth.js';
 import bubbleRoutes from './routes/bubble.js';
 import openaiRoutes from './routes/openai.js';
+import scraperRoutes from './routes/scraper.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -44,7 +45,8 @@ function isAllowedOrigin(origin: string | undefined): boolean {
   if (!origin) return true;
   if (origin === FRONTEND_URL) return true;
   if (origin === 'https://acquirolabs.vercel.app') return true;
-  if (origin.includes('acquirolabs.vercel.app')) return true; // production + preview deployments
+  // endsWith prevents subdomain-spoofing attacks (e.g. evil-acquirolabs.vercel.app.attacker.com)
+  if (origin.endsWith('.acquirolabs.vercel.app')) return true; // production + preview deployments
   if (origin.startsWith('http://localhost:') || origin.startsWith('https://localhost:')) return true;
   return false;
 }
@@ -78,6 +80,7 @@ app.use('/api/email', emailRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/bubble', bubbleRoutes);
 app.use('/api/openai', openaiRoutes);
+app.use('/api/scraper', scraperRoutes);
 
 app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Error:', err);

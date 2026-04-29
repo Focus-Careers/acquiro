@@ -1,4 +1,5 @@
 import { API_URL } from '../utils/apiUrl';
+import { getAuthHeaders } from '../utils/authHeaders';
 
 export interface CreateCheckoutSessionParams {
   billingPeriod: 'monthly' | 'annual';
@@ -53,7 +54,7 @@ export async function cancelSubscription(subscriptionId: string): Promise<{
   }
   const response = await fetch(`${API_URL}/api/checkout/cancel-subscription`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify({ subscriptionId }),
   });
 

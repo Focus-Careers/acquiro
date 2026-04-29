@@ -1,7 +1,16 @@
 // Magic link auth routes — Supabase implementation
 import { Router, Request, Response } from 'express';
 import { randomBytes } from 'crypto';
+import jwt from 'jsonwebtoken';
 import { supabase } from '../lib/supabase.js';
+
+const JWT_TTL = '7d'; // Session tokens last 7 days
+
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error('JWT_SECRET env var is not set');
+  return secret;
+}
 
 const router = Router();
 
@@ -113,11 +122,15 @@ router.get('/verify', async (req: Request, res: Response) => {
       if (error) console.warn('[auth] clearMagicLinkToken failed (non-fatal):', error.message);
     });
 
+  // Issue a signed session JWT so the client can prove identity on subsequent API calls
+  const authToken = jwt.sign({ sub: user.id }, getJwtSecret(), { expiresIn: JWT_TTL });
+
   console.log(`[auth] Magic link verified for user ${user.id}`);
   return res.json({
     user_id: user.id,
     email: user.email,
     name: user.name ?? null,
+    auth_token: authToken,
   });
 });
 

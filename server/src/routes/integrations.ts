@@ -40,6 +40,14 @@ router.post('/summarise-website', async (req, res) => {
     return res.status(400).json({ error: 'Only http/https URLs are allowed' });
   }
 
+  // Block SSRF: reject requests to loopback, link-local, and private IP ranges.
+  // This prevents using the server as a proxy to fetch cloud metadata (169.254.169.254),
+  // internal services, or localhost — a classic Server-Side Request Forgery attack.
+  const PRIVATE_HOST_PATTERN = /^(localhost|127\.\d+\.\d+\.\d+|0\.0\.0\.0|::1|\[::1\]|169\.254\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+)$/i;
+  if (PRIVATE_HOST_PATTERN.test(parsedUrl.hostname)) {
+    return res.status(400).json({ error: 'URL is not allowed' });
+  }
+
   let pageText: string;
   try {
     const pageRes = await fetch(url, {

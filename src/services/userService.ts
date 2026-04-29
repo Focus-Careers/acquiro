@@ -4,6 +4,7 @@
  */
 
 import { API_URL } from '../utils/apiUrl';
+import { getAuthHeaders } from '../utils/authHeaders';
 
 interface CreateUserPayload {
   lead_id: string;
@@ -54,7 +55,7 @@ export async function updateUser(userId: string, subscriptionId: string): Promis
 
   const response = await fetch(`${API_URL}/api/bubble/user/${userId}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify({ subscription_id: subscriptionId, is_subscribed: true }),
   });
 
@@ -77,7 +78,7 @@ export async function unsubscribeUser(userId: string, cancelAt?: string | null):
 
   const response = await fetch(`${API_URL}/api/bubble/user/${userId}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify(body),
   });
 
@@ -104,7 +105,7 @@ export async function getUser(userId: string): Promise<GetUserResult> {
 
   const response = await fetch(`${API_URL}/api/bubble/user/${userId}`, {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
   });
 
   const responseText = await response.text();
@@ -191,6 +192,7 @@ export interface GetUserByMagicLinkResult {
   email: string;
   user_id: string;
   name: string | null;
+  auth_token: string | null;
 }
 
 export async function getUserByMagicLink(link: string): Promise<GetUserByMagicLinkResult> {
@@ -202,12 +204,13 @@ export async function getUserByMagicLink(link: string): Promise<GetUserByMagicLi
 
   if (!response.ok) throw new Error('LINK_EXPIRED');
 
-  const data = await response.json() as { user_id: string; email: string; name: string | null };
+  const data = await response.json() as { user_id: string; email: string; name: string | null; auth_token?: string | null };
   if (!data.user_id || !data.email) throw new Error('LINK_EXPIRED');
 
   return {
     email: data.email,
     user_id: data.user_id,
     name: data.name ?? null,
+    auth_token: data.auth_token ?? null,
   };
 }

@@ -1,4 +1,5 @@
 import { API_URL } from '../utils/apiUrl';
+import { getAuthHeaders } from '../utils/authHeaders';
 
 const SCRAPER_BASE = import.meta.env.VITE_SCRAPER_URL as string;
 
@@ -14,7 +15,7 @@ export interface UserNotification {
 }
 
 export async function getUserNotifications(userId: string): Promise<UserNotification[]> {
-  const res = await fetch(`${API_URL}/api/bubble/notifications/${userId}`);
+  const res = await fetch(`${API_URL}/api/bubble/notifications/${userId}`, { headers: getAuthHeaders() });
   if (!res.ok) throw new Error(`Failed to fetch notifications: ${res.status}`);
   const json = await res.json();
   return json.response?.results ?? [];
@@ -23,13 +24,13 @@ export async function getUserNotifications(userId: string): Promise<UserNotifica
 export async function markNotificationActioned(notificationId: string): Promise<void> {
   const res = await fetch(`${API_URL}/api/bubble/notifications/${notificationId}/action`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
   });
   if (!res.ok) throw new Error(`Failed to mark notification actioned: ${res.status}`);
 }
 
 export async function getNdaFileUrl(outreachId: string): Promise<string | null> {
-  const res = await fetch(`${API_URL}/api/bubble/notifications/nda/${outreachId}`);
+  const res = await fetch(`${API_URL}/api/bubble/notifications/nda/${outreachId}`, { headers: getAuthHeaders() });
   if (!res.ok) return null;
   const json = await res.json();
   return json.nda_file_url ?? null;

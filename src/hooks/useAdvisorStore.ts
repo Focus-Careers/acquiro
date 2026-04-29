@@ -32,6 +32,8 @@ interface AdvisorStore {
   matchToDiscuss: Match | null;
   /** ElevenLabs conversation ID from the most recent voice call — used for buyer info extraction */
   conversationId: string | null;
+  /** JWT issued by /api/auth/verify — sent as Authorization: Bearer on all protected API calls */
+  authToken: string | null;
 
   // Actions
   setType: (type: AdvisorConfig['type']) => void;
@@ -58,6 +60,7 @@ interface AdvisorStore {
   clearMatchToDiscuss: () => void;
   setConversationId: (id: string) => void;
   clearConversationId: () => void;
+  setAuthToken: (token: string) => void;
   
   goToStep: (step: WizardStep) => void;
   nextStep: () => void;
@@ -93,6 +96,8 @@ const sessionPartialize = (state: AdvisorStore) => ({
   isAdmin: state.isAdmin,
   /** Persisted so it survives the Stripe checkout redirect — cleared after use in CheckoutComplete */
   conversationId: state.conversationId,
+  /** JWT session token — persisted so the user stays authenticated across page reloads */
+  authToken: state.authToken,
 });
 
 export const useAdvisorStore = create<AdvisorStore>()(
@@ -116,6 +121,7 @@ export const useAdvisorStore = create<AdvisorStore>()(
   isLeadReconnection: false,
   matchToDiscuss: null,
   conversationId: null,
+  authToken: null,
 
   setType: (type) => set((state) => ({ config: { ...state.config, type } })),
   
@@ -184,6 +190,7 @@ export const useAdvisorStore = create<AdvisorStore>()(
   clearMatchToDiscuss: () => set({ matchToDiscuss: null }),
   setConversationId: (id) => set({ conversationId: id }),
   clearConversationId: () => set({ conversationId: null }),
+  setAuthToken: (token) => set({ authToken: token }),
 
   goToStep: (step) => set({ currentStep: step }),
   
@@ -327,6 +334,7 @@ export const useAdvisorStore = create<AdvisorStore>()(
     subscriptionId: null,
     cancelAt: null,
     isAdmin: null,
+    authToken: null,
   }),
 }),
     {

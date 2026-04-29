@@ -4,6 +4,7 @@
  */
 
 import { API_URL } from '../utils/apiUrl';
+import { getAuthHeaders } from '../utils/authHeaders';
 
 export interface Match {
   id: string;
@@ -18,7 +19,9 @@ export interface Match {
 export async function fetchMatches(userId: string): Promise<Match[]> {
   if (!userId) throw new Error('User ID is required');
 
-  const response = await fetch(`${API_URL}/api/bubble/matches/${userId}`);
+  const response = await fetch(`${API_URL}/api/bubble/matches/${userId}`, {
+    headers: getAuthHeaders(),
+  });
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -34,7 +37,7 @@ export async function dismissMatch(matchId: string, reason?: string): Promise<vo
 
   const response = await fetch(`${API_URL}/api/bubble/matches/${matchId}/dismiss`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify(reason ? { reason } : {}),
   });
 

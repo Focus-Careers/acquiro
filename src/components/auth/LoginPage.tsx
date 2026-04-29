@@ -9,7 +9,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const linkParam = searchParams.get('link');
-  const { userId, setUserId, setUserName, setUserEmail } = useAdvisorStore();
+  const { userId, setUserId, setUserName, setUserEmail, setAuthToken } = useAdvisorStore();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +32,7 @@ export function LoginPage() {
         setUserEmail(user.email);
         setUserId(user.user_id);
         if (user.name) setUserName(user.name);
+        if (user.auth_token) setAuthToken(user.auth_token);
         navigate('/dashboard', { replace: true });
       })
       .catch(() => {

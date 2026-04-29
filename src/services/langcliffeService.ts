@@ -1,5 +1,11 @@
-const SCRAPER_BASE = import.meta.env.VITE_SCRAPER_URL as string;
-const ADMIN_KEY = import.meta.env.VITE_SCRAPER_ADMIN_KEY as string;
+/**
+ * Langcliffe outreach queue service — calls the Acquiro backend scraper proxy (/api/scraper/*).
+ * The scraper admin key is held server-side only.
+ */
+import { getAuthHeaders } from '../utils/authHeaders';
+import { API_URL } from '../utils/apiUrl';
+
+const BASE = `${API_URL}/api/scraper`;
 
 export interface OutreachDraft {
   id: string;
@@ -21,50 +27,32 @@ export interface OutreachDraft {
   created_at: string;
 }
 
-function adminHeaders() {
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${ADMIN_KEY}`,
-  };
-}
-
 export async function getLangcliffeQueue(): Promise<OutreachDraft[]> {
-  const res = await fetch(`${SCRAPER_BASE}/admin/langcliffe-queue`, {
-    headers: adminHeaders(),
-  });
+  const res = await fetch(`${BASE}/langcliffe-queue`, { headers: getAuthHeaders() });
   if (!res.ok) throw new Error(`Queue fetch failed: ${res.status}`);
   const json = await res.json();
   return json.queue ?? [];
 }
 
 export async function approveOutreach(id: string): Promise<void> {
-  const res = await fetch(`${SCRAPER_BASE}/admin/langcliffe-queue/${id}/approve`, {
-    method: 'POST',
-    headers: adminHeaders(),
-  });
+  const res = await fetch(`${BASE}/langcliffe-queue/${id}/approve`, { method: 'POST', headers: getAuthHeaders() });
   if (!res.ok) throw new Error(`Approve failed: ${res.status}`);
 }
 
 export async function deleteOutreach(id: string): Promise<void> {
-  const res = await fetch(`${SCRAPER_BASE}/admin/langcliffe-queue/${id}/delete`, {
-    method: 'POST',
-    headers: adminHeaders(),
-  });
+  const res = await fetch(`${BASE}/langcliffe-queue/${id}/delete`, { method: 'POST', headers: getAuthHeaders() });
   if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
 }
 
 export async function approveReply(id: string): Promise<void> {
-  const res = await fetch(`${SCRAPER_BASE}/admin/langcliffe-queue/${id}/approve-reply`, {
-    method: 'POST',
-    headers: adminHeaders(),
-  });
+  const res = await fetch(`${BASE}/langcliffe-queue/${id}/approve-reply`, { method: 'POST', headers: getAuthHeaders() });
   if (!res.ok) throw new Error(`Approve reply failed: ${res.status}`);
 }
 
 export async function rejectReply(id: string, feedback?: string): Promise<string> {
-  const res = await fetch(`${SCRAPER_BASE}/admin/langcliffe-queue/${id}/reject-reply`, {
+  const res = await fetch(`${BASE}/langcliffe-queue/${id}/reject-reply`, {
     method: 'POST',
-    headers: adminHeaders(),
+    headers: getAuthHeaders(),
     body: JSON.stringify({ feedback }),
   });
   if (!res.ok) throw new Error(`Reject reply failed: ${res.status}`);
@@ -73,25 +61,19 @@ export async function rejectReply(id: string, feedback?: string): Promise<string
 }
 
 export async function approveAcknowledgment(id: string): Promise<void> {
-  const res = await fetch(`${SCRAPER_BASE}/admin/langcliffe-queue/${id}/approve-ack`, {
-    method: 'POST',
-    headers: adminHeaders(),
-  });
+  const res = await fetch(`${BASE}/langcliffe-queue/${id}/approve-ack`, { method: 'POST', headers: getAuthHeaders() });
   if (!res.ok) throw new Error(`Approve acknowledgment failed: ${res.status}`);
 }
 
 export async function approveNDAReturn(id: string): Promise<void> {
-  const res = await fetch(`${SCRAPER_BASE}/admin/langcliffe-queue/${id}/approve-nda-return`, {
-    method: 'POST',
-    headers: adminHeaders(),
-  });
+  const res = await fetch(`${BASE}/langcliffe-queue/${id}/approve-nda-return`, { method: 'POST', headers: getAuthHeaders() });
   if (!res.ok) throw new Error(`Approve NDA return failed: ${res.status}`);
 }
 
 export async function rejectOutreach(id: string, feedback?: string): Promise<string> {
-  const res = await fetch(`${SCRAPER_BASE}/admin/langcliffe-queue/${id}/reject`, {
+  const res = await fetch(`${BASE}/langcliffe-queue/${id}/reject`, {
     method: 'POST',
-    headers: adminHeaders(),
+    headers: getAuthHeaders(),
     body: JSON.stringify({ feedback }),
   });
   if (!res.ok) throw new Error(`Reject failed: ${res.status}`);

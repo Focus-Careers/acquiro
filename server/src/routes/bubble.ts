@@ -11,6 +11,7 @@
 import { Router, Request, Response } from 'express';
 import OpenAI from 'openai';
 import { supabase } from '../lib/supabase.js';
+import { requireAuth, requireAdmin } from '../middleware/requireAuth.js';
 
 const router = Router();
 
@@ -29,7 +30,7 @@ function wrap(handler: Handler) {
 // ── USER ──────────────────────────────────────────────────────────────────────
 
 /** GET /api/bubble/user/:userId — get user profile by ID */
-router.get('/user/:userId', wrap(async (req, res) => {
+router.get('/user/:userId', requireAuth, wrap(async (req, res) => {
   const { data: u, error } = await supabase
     .from('users')
     .select('*')
@@ -66,10 +67,12 @@ router.post('/user/lookup', wrap(async (req, res) => {
 }));
 
 /** PATCH /api/bubble/user/:userId — update user fields */
-router.patch('/user/:userId', wrap(async (req, res) => {
+router.patch('/user/:userId', requireAuth, wrap(async (req, res) => {
   const body = req.body as Record<string, unknown>;
 
-  const allowedFields = ['name', 'subscription_id', 'is_subscribed', 'cancel_at', 'role', 'magic_link', 'magic_link_expires'];
+  // magic_link + magic_link_expires intentionally excluded — only auth.ts writes those directly.
+  // Allowing them here would let anyone set a known token on any account (account takeover).
+  const allowedFields = ['name', 'subscription_id', 'is_subscribed', 'cancel_at', 'role'];
   const update: Record<string, unknown> = {};
   for (const field of allowedFields) {
     if (field in body) update[field] = body[field];
@@ -586,7 +589,7 @@ router.post('/buyer-info/extract', wrap(async (req, res) => {
 }));
 
 /** GET /api/bubble/buyer-info/:userId — get buyer info for a user */
-router.get('/buyer-info/:userId', wrap(async (req, res) => {
+router.get('/buyer-info/:userId', requireAuth, wrap(async (req, res) => {
   const { data: info } = await supabase
     .from('buyer_info')
     .select('*')
@@ -601,7 +604,7 @@ router.get('/buyer-info/:userId', wrap(async (req, res) => {
 // ── MATCHES ───────────────────────────────────────────────────────────────────
 
 /** GET /api/bubble/matches/:userId — top matches with business details */
-router.get('/matches/:userId', wrap(async (req, res) => {
+router.get('/matches/:userId', requireAuth, wrap(async (req, res) => {
   const { userId } = req.params;
 
   // Single query with join — replaces the N+1 pattern
@@ -632,7 +635,7 @@ router.get('/matches/:userId', wrap(async (req, res) => {
 }));
 
 /** PATCH /api/bubble/matches/:matchId/dismiss — dismiss a match with optional reason */
-router.patch('/matches/:matchId/dismiss', wrap(async (req, res) => {
+router.patch('/matches/:matchId/dismiss', requireAuth, wrap(async (req, res) => {
   const { reason } = req.body as { reason?: string };
   const allowedReasons = ['wrong_sector', 'wrong_price', 'wrong_size', 'wrong_location'];
   const patch: Record<string, unknown> = { dismissed: true };
@@ -647,7 +650,7 @@ router.patch('/matches/:matchId/dismiss', wrap(async (req, res) => {
 // ── ADMIN ─────────────────────────────────────────────────────────────────────
 
 /** GET /api/bubble/admin/stats — user/subscriber counts */
-router.get('/admin/stats', wrap(async (req, res) => {
+router.get('/admin/stats', requireAdmin, wrap(async (req, res) => {
   const [totalRes, activeRes] = await Promise.all([
     supabase.from('users').select('*', { count: 'exact', head: true }),
     supabase.from('users').select('*', { count: 'exact', head: true }).eq('is_subscribed', true),
@@ -661,7 +664,7 @@ router.get('/admin/stats', wrap(async (req, res) => {
 }));
 
 /** GET /api/bubble/listings?cursor=0&limit=100 — admin listings */
-router.get('/listings', wrap(async (req, res) => {
+router.get('/listings', requireAdmin, wrap(async (req, res) => {
   const cursor = parseInt((req.query.cursor as string) ?? '0', 10);
   const limit = parseInt((req.query.limit as string) ?? '100', 10);
 
@@ -686,7 +689,7 @@ router.get('/listings', wrap(async (req, res) => {
 
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
 
-router.get('/settings/user/:userId', wrap(async (req, res) => {
+router.get('/settings/user/:userId', requireAuth, wrap(async (req, res) => {
   const { data: u } = await supabase
     .from('users')
     .select('*')
@@ -697,7 +700,7 @@ router.get('/settings/user/:userId', wrap(async (req, res) => {
   res.json({ response: u });
 }));
 
-router.patch('/settings/user/:userId', wrap(async (req, res) => {
+router.patch('/settings/user/:userId', requireAuth, wrap(async (req, res) => {
   const body = req.body as Record<string, unknown>;
 
   const allowedFields = ['name', 'langcliffe_connected', 'dealsuite_connected'];
@@ -713,7 +716,7 @@ router.patch('/settings/user/:userId', wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
-router.get('/settings/agent/:userId', wrap(async (req, res) => {
+router.get('/settings/agent/:userId', requireAuth, wrap(async (req, res) => {
   const { data: agents } = await supabase
     .from('agents')
     .select('*')
@@ -726,7 +729,7 @@ router.get('/settings/agent/:userId', wrap(async (req, res) => {
   });
 }));
 
-router.patch('/settings/agent/:agentId', wrap(async (req, res) => {
+router.patch('/settings/agent/:agentId', requireAuth, wrap(async (req, res) => {
   const body = req.body as Record<string, unknown>;
 
   const allowedFields = ['name', 'email'];
@@ -742,7 +745,7 @@ router.patch('/settings/agent/:agentId', wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
-router.get('/settings/buyer-info/:userId', wrap(async (req, res) => {
+router.get('/settings/buyer-info/:userId', requireAuth, wrap(async (req, res) => {
   const { data: infos } = await supabase
     .from('buyer_info')
     .select('*')
@@ -755,7 +758,7 @@ router.get('/settings/buyer-info/:userId', wrap(async (req, res) => {
   });
 }));
 
-router.patch('/settings/buyer-info/:buyerInfoId', wrap(async (req, res) => {
+router.patch('/settings/buyer-info/:buyerInfoId', requireAuth, wrap(async (req, res) => {
   const body = req.body as Record<string, unknown>;
 
   // Pass through directly — frontend sends clean Supabase column names
@@ -768,7 +771,7 @@ router.patch('/settings/buyer-info/:buyerInfoId', wrap(async (req, res) => {
 
 // ── NOTIFICATIONS ─────────────────────────────────────────────────────────────
 
-router.get('/notifications/nda/:outreachId', wrap(async (req, res) => {
+router.get('/notifications/nda/:outreachId', requireAuth, wrap(async (req, res) => {
   const { data } = await supabase
     .from('langcliffe_outreach')
     .select('nda_file')
@@ -786,7 +789,7 @@ router.get('/notifications/nda/:outreachId', wrap(async (req, res) => {
   res.json({ nda_file_url: error ? null : urlData.signedUrl });
 }));
 
-router.get('/notifications/:userId', wrap(async (req, res) => {
+router.get('/notifications/:userId', requireAuth, wrap(async (req, res) => {
   const { data: notifications } = await supabase
     .from('user_notification')
     .select('*')
@@ -801,7 +804,7 @@ router.get('/notifications/:userId', wrap(async (req, res) => {
   });
 }));
 
-router.patch('/notifications/:notificationId/action', wrap(async (req, res) => {
+router.patch('/notifications/:notificationId/action', requireAuth, wrap(async (req, res) => {
   const { error } = await supabase
     .from('user_notification')
     .update({ status: 'actioned' })

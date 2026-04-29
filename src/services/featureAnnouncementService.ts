@@ -1,5 +1,11 @@
-const API_URL = import.meta.env.VITE_SCRAPER_URL as string;
-const ADMIN_KEY = import.meta.env.VITE_SCRAPER_ADMIN_KEY as string;
+/**
+ * Feature announcement service — calls the Acquiro backend scraper proxy (/api/scraper/*).
+ * The scraper admin key is held server-side only.
+ */
+import { getAuthHeaders } from '../utils/authHeaders';
+import { API_URL } from '../utils/apiUrl';
+
+const BASE = `${API_URL}/api/scraper`;
 
 export interface FeatureAnnouncement {
   id: string;
@@ -17,15 +23,8 @@ export interface FeatureImpressionStats {
   uniqueUsers: number;
 }
 
-function headers() {
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${ADMIN_KEY}`,
-  };
-}
-
 export async function getFeatureAnnouncements(): Promise<FeatureAnnouncement[]> {
-  const res = await fetch(`${API_URL}/admin/feature-announcements`, { headers: headers() });
+  const res = await fetch(`${BASE}/feature-announcements`, { headers: getAuthHeaders() });
   if (!res.ok) throw new Error(`Failed to fetch feature announcements: ${res.status}`);
   const json = await res.json();
   return json.announcements ?? [];
@@ -39,9 +38,9 @@ export async function createFeatureAnnouncement(data: {
   max_impressions?: number;
   completion_field?: string;
 }): Promise<string> {
-  const res = await fetch(`${API_URL}/admin/feature-announcements`, {
+  const res = await fetch(`${BASE}/feature-announcements`, {
     method: 'POST',
-    headers: headers(),
+    headers: getAuthHeaders(),
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error(`Failed to create feature announcement: ${res.status}`);
@@ -50,16 +49,16 @@ export async function createFeatureAnnouncement(data: {
 }
 
 export async function updateFeatureAnnouncement(id: string, data: Partial<FeatureAnnouncement>): Promise<void> {
-  const res = await fetch(`${API_URL}/admin/feature-announcements/${id}`, {
+  const res = await fetch(`${BASE}/feature-announcements/${id}`, {
     method: 'PATCH',
-    headers: headers(),
+    headers: getAuthHeaders(),
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error(`Failed to update feature announcement: ${res.status}`);
 }
 
 export async function getFeatureImpressionStats(id: string): Promise<FeatureImpressionStats> {
-  const res = await fetch(`${API_URL}/admin/feature-announcements/${id}/stats`, { headers: headers() });
+  const res = await fetch(`${BASE}/feature-announcements/${id}/stats`, { headers: getAuthHeaders() });
   if (!res.ok) throw new Error(`Failed to fetch stats: ${res.status}`);
   return res.json();
 }

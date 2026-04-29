@@ -65,6 +65,9 @@ app.use(
     credentials: true,
   })
 );
+// Stripe webhook needs the raw request body for signature verification.
+// Must be registered BEFORE express.json() so this route gets Buffer, not parsed object.
+app.use('/api/checkout/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
 
 app.get('/', (req, res) => {

@@ -1,6 +1,10 @@
 // Magic link auth routes — Supabase implementation
 import { Router, Request, Response } from 'express';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
+
+function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
 import jwt from 'jsonwebtoken';
 import { supabase } from '../lib/supabase.js';
 
@@ -47,10 +51,10 @@ router.post('/magic-link', async (req: Request, res: Response) => {
   const token = randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + TOKEN_TTL_MS).toISOString();
 
-  // 3. Store on user record
+  // 3. Store hashed token — raw token goes in the email URL only, never in the DB
   const { error: updateErr } = await supabase
     .from('users')
-    .update({ magic_link: token, magic_link_expires: expiresAt })
+    .update({ magic_link: hashToken(token), magic_link_expires: expiresAt })
     .eq('id', user.id);
 
   if (updateErr) {
@@ -96,11 +100,11 @@ router.get('/verify', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'token is required' });
   }
 
-  // 1. Look up user by token
+  // 1. Hash the incoming token and look up the stored hash
   const { data: user } = await supabase
     .from('users')
-    .select('id, email, name, magic_link_expires')
-    .eq('magic_link', token.trim())
+    .select('id, email, name, magic_link_expires, is_admin')
+    .eq('magic_link', hashToken(token.trim()))
     .single();
 
   if (!user) {
@@ -122,8 +126,8 @@ router.get('/verify', async (req: Request, res: Response) => {
       if (error) console.warn('[auth] clearMagicLinkToken failed (non-fatal):', error.message);
     });
 
-  // Issue a signed session JWT so the client can prove identity on subsequent API calls
-  const authToken = jwt.sign({ sub: user.id }, getJwtSecret(), { expiresIn: JWT_TTL });
+  // Issue a signed session JWT — includes isAdmin so admin routes can gate without a DB lookup
+  const authToken = jwt.sign({ sub: user.id, isAdmin: user.is_admin ?? false }, getJwtSecret(), { expiresIn: JWT_TTL });
 
   console.log(`[auth] Magic link verified for user ${user.id}`);
   return res.json({

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { promises as dns } from 'dns';
 import OpenAI from 'openai';
 
 const router = Router();
@@ -40,12 +41,19 @@ router.post('/summarise-website', async (req, res) => {
     return res.status(400).json({ error: 'Only http/https URLs are allowed' });
   }
 
-  // Block SSRF: reject requests to loopback, link-local, and private IP ranges.
-  // This prevents using the server as a proxy to fetch cloud metadata (169.254.169.254),
-  // internal services, or localhost — a classic Server-Side Request Forgery attack.
-  const PRIVATE_HOST_PATTERN = /^(localhost|127\.\d+\.\d+\.\d+|0\.0\.0\.0|::1|\[::1\]|169\.254\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+)$/i;
-  if (PRIVATE_HOST_PATTERN.test(parsedUrl.hostname)) {
+  // Block SSRF: reject direct private/loopback hostnames and also resolve the hostname
+  // via DNS to catch DNS-rebinding attacks where a public hostname maps to a private IP.
+  const PRIVATE_IP_PATTERN = /^(localhost|127\.\d+\.\d+\.\d+|0\.0\.0\.0|::1|\[::1\]|169\.254\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+)$/i;
+  if (PRIVATE_IP_PATTERN.test(parsedUrl.hostname)) {
     return res.status(400).json({ error: 'URL is not allowed' });
+  }
+  try {
+    const { address } = await dns.lookup(parsedUrl.hostname);
+    if (PRIVATE_IP_PATTERN.test(address)) {
+      return res.status(400).json({ error: 'URL is not allowed' });
+    }
+  } catch {
+    return res.status(422).json({ error: 'Could not resolve the hostname' });
   }
 
   let pageText: string;

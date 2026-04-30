@@ -13,6 +13,7 @@ interface CreateUserPayload {
 
 interface CreateUserResult {
   user_id: string;
+  auth_token: string | null;
 }
 
 export async function createUser(leadId: string, subscriptionId?: string): Promise<CreateUserResult | null> {
@@ -35,12 +36,12 @@ export async function createUser(leadId: string, subscriptionId?: string): Promi
     const responseText = await response.text();
     if (!response.ok) throw new Error(`create_user failed: ${response.status}: ${responseText}`);
 
-    const data = JSON.parse(responseText) as { response?: { user_id?: string } };
+    const data = JSON.parse(responseText) as { response?: { user_id?: string }; auth_token?: string };
     const userId = data.response?.user_id;
     if (!userId) throw new Error('Response missing user_id');
 
     console.log('[userService] User created, user_id:', userId);
-    return { user_id: userId };
+    return { user_id: userId, auth_token: data.auth_token ?? null };
   } catch (error) {
     console.error('[userService] Failed to create user account:', error);
     throw error;

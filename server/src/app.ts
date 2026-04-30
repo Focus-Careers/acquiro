@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
@@ -42,14 +43,40 @@ if (missingVars.length > 0 && process.env.VERCEL !== '1') {
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 function isAllowedOrigin(origin: string | undefined): boolean {
-  if (!origin) return true;
+  if (!origin) return false; // non-browser clients (curl, Postman) blocked — not a legitimate CORS origin
   if (origin === FRONTEND_URL) return true;
   if (origin === 'https://acquirolabs.vercel.app') return true;
-  // endsWith prevents subdomain-spoofing attacks (e.g. evil-acquirolabs.vercel.app.attacker.com)
-  if (origin.endsWith('.acquirolabs.vercel.app')) return true; // production + preview deployments
-  if (origin.startsWith('http://localhost:') || origin.startsWith('https://localhost:')) return true;
+  // endsWith prevents substring-injection (e.g. evil-acquirolabs.vercel.app.attacker.com)
+  if (origin.endsWith('.acquirolabs.vercel.app')) return true; // preview deployments
+  // Anchored localhost check — any port, http or https
+  if (/^https?:\/\/localhost(:\d+)?$/.test(origin)) return true;
   return false;
 }
+
+// Rate limiters — applied after CORS so rejected origins never consume a slot
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many auth attempts, please try again later.' },
+});
+
+const aiLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'AI rate limit exceeded, please try again later.' },
+});
 
 const app = express();
 app.use(
@@ -70,6 +97,8 @@ app.use(
 app.use('/api/checkout/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
 
+app.use(globalLimiter);
+
 app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'Acquiro Backend API', health: '/health', checkout: '/api/checkout' });
 });
@@ -80,9 +109,9 @@ app.use('/api/checkout', checkoutRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/integrations', integrationsRoutes);
 app.use('/api/email', emailRoutes);
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/bubble', bubbleRoutes);
-app.use('/api/openai', openaiRoutes);
+app.use('/api/openai', aiLimiter, openaiRoutes);
 app.use('/api/scraper', scraperRoutes);
 
 app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {

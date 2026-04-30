@@ -3,25 +3,22 @@
  */
 
 import { API_URL } from '../utils/apiUrl';
+import { getAuthHeaders } from '../utils/authHeaders';
 
 export function sendLeadMail(leadId: string): void {
-  try {
-    const url = `${API_URL}/api/bubble/lead/mail`;
-    const blob = new Blob([JSON.stringify({ lead_id: leadId })], { type: 'application/json' });
-    const queued = navigator.sendBeacon(url, blob);
-    if (!queued) {
-      // sendBeacon can return false if the queue is full — fall back to fetch
-      fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lead_id: leadId }),
-        keepalive: true,
-      }).catch(() => {});
-    }
+  // sendBeacon cannot send custom headers; use fetch with keepalive instead.
+  // This endpoint requires admin auth (requireAdmin), so the token must be in headers.
+  const url = `${API_URL}/api/bubble/lead/mail`;
+  fetch(url, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ lead_id: leadId }),
+    keepalive: true,
+  }).then(() => {
     console.log('[leadMailService] Retention email queued for lead:', leadId);
-  } catch (error) {
+  }).catch((error) => {
     console.error('[leadMailService] Failed to queue lead mail:', error);
-  }
+  });
 }
 
 const SENT_KEY_PREFIX = 'acquiro_lead_mail_sent_';

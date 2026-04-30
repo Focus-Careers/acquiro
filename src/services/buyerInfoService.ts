@@ -3,6 +3,7 @@
  */
 
 import { API_URL } from '../utils/apiUrl';
+import { getAuthHeaders } from '../utils/authHeaders';
 
 export interface BuyerInfo {
   [key: string]: unknown;
@@ -12,7 +13,9 @@ export async function getBuyerInfo(userId: string): Promise<BuyerInfo | null> {
   try {
     if (!userId) return null;
 
-    const response = await fetch(`${API_URL}/api/bubble/buyer-info/${userId}`);
+    const response = await fetch(`${API_URL}/api/bubble/buyer-info/${userId}`, {
+      headers: getAuthHeaders(),
+    });
 
     if (!response.ok) {
       console.warn('[buyerInfoService] get_buyerinfo failed:', response.status);

@@ -5,6 +5,7 @@ const router = Router();
 // Models this proxy is allowed to call. Prevents callers from requesting
 // expensive models (e.g. o1, gpt-4-turbo) and draining OpenAI quota.
 const ALLOWED_MODELS = new Set([
+  'gpt-5-mini',
   'gpt-4o-mini',
   'gpt-4o',
 ]);

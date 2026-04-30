@@ -10,7 +10,7 @@ import { motion } from 'framer-motion';
 export function CheckoutComplete() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { userId: storeUserId, leadId: storeLeadId, setUserId, setLeadId, setSubscriptionStatus, userName, config, conversationId, clearConversationId } = useAdvisorStore();
+  const { userId: storeUserId, leadId: storeLeadId, setUserId, setLeadId, setSubscriptionStatus, setAuthToken, userName, config, conversationId, clearConversationId } = useAdvisorStore();
   const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'update_error'>('loading');
   const [showWhatsNext, setShowWhatsNext] = useState(false);
   const [retryTrigger, setRetryTrigger] = useState(0);
@@ -73,13 +73,17 @@ export function CheckoutComplete() {
             
             if (userResult?.user_id) {
               setUserId(userResult.user_id);
+              // Store the auth token immediately so subsequent API calls (e.g. buyer-info extract) are authenticated
+              if (userResult.auth_token) setAuthToken(userResult.auth_token);
               console.log('[CheckoutComplete] ✅ User account created. Stored userId for dashboard:', userResult.user_id);
               // Fire-and-forget: extract buyer info from ElevenLabs voice transcript (if call was made)
               if (conversationId) {
                 const apiUrl = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '');
+                const extractHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+                if (userResult.auth_token) extractHeaders['Authorization'] = `Bearer ${userResult.auth_token}`;
                 fetch(`${apiUrl}/api/bubble/buyer-info/extract`, {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
+                  headers: extractHeaders,
                   body: JSON.stringify({ userId: userResult.user_id, conversationId }),
                 }).then((r) => r.json()).then((data) => {
                   console.log('[CheckoutComplete] Buyer info extraction:', data);
@@ -109,7 +113,7 @@ export function CheckoutComplete() {
         console.error('[CheckoutComplete] Error verifying payment session:', error);
         setStatus('error');
       });
-  }, [searchParams, storeUserId, storeLeadId, setUserId, setLeadId, setSubscriptionStatus, retryTrigger]);
+  }, [searchParams, storeUserId, storeLeadId, setUserId, setLeadId, setSubscriptionStatus, setAuthToken, conversationId, clearConversationId, retryTrigger]);
 
   // Show "What's Next" screen after successful payment
   if (showWhatsNext && status === 'success') {

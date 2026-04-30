@@ -10,10 +10,26 @@
 
 import { Router, Request, Response } from 'express';
 import OpenAI from 'openai';
+import jwt from 'jsonwebtoken';
 import { supabase } from '../lib/supabase.js';
 import { requireAuth, requireAdmin } from '../middleware/requireAuth.js';
 
+function issueSessionToken(userId: string, isAdmin = false): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error('JWT_SECRET env var is not set');
+  return jwt.sign({ sub: userId, isAdmin }, secret, { expiresIn: '7d' });
+}
+
 const router = Router();
+
+/** Assert req.userId matches the :userId param — prevents IDOR on user-scoped routes. */
+function assertOwner(req: Request, res: Response): boolean {
+  if (req.userId !== req.params.userId) {
+    res.status(403).json({ error: 'Forbidden' });
+    return false;
+  }
+  return true;
+}
 
 type Handler = (req: Request, res: Response) => Promise<void>;
 function wrap(handler: Handler) {
@@ -31,6 +47,7 @@ function wrap(handler: Handler) {
 
 /** GET /api/bubble/user/:userId — get user profile by ID */
 router.get('/user/:userId', requireAuth, wrap(async (req, res) => {
+  if (!assertOwner(req, res)) return;
   const { data: u, error } = await supabase
     .from('users')
     .select('*')
@@ -68,6 +85,7 @@ router.post('/user/lookup', wrap(async (req, res) => {
 
 /** PATCH /api/bubble/user/:userId — update user fields */
 router.patch('/user/:userId', requireAuth, wrap(async (req, res) => {
+  if (!assertOwner(req, res)) return;
   const body = req.body as Record<string, unknown>;
 
   // magic_link + magic_link_expires intentionally excluded — only auth.ts writes those directly.
@@ -99,13 +117,27 @@ router.post('/user/account', wrap(async (req, res) => {
     .single();
   if (leadErr || !lead?.email) throw new Error(`Lead ${lead_id} not found or has no email`);
 
-  // 2. Create auth user via Supabase Auth (triggers handle_new_auth_user → inserts public.users)
+  // 2. Create auth user — idempotent: if email already registered, find existing user instead
   const { data: authData, error: authErr } = await supabase.auth.admin.createUser({
     email: lead.email,
     email_confirm: true,
   });
-  if (authErr) throw new Error(`Auth user creation failed: ${authErr.message}`);
-  const userId = authData.user.id;
+  let userId: string;
+  if (authErr) {
+    const alreadyExists = authErr.message.toLowerCase().includes('already') || authErr.message.toLowerCase().includes('exist');
+    if (!alreadyExists) throw new Error(`Auth user creation failed: ${authErr.message}`);
+    // Find the existing user by email
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', lead.email)
+      .maybeSingle();
+    if (!existingUser?.id) throw new Error(`Auth user already exists but could not find users record for ${lead.email}`);
+    userId = existingUser.id;
+    console.log(`[db] create_user: user already exists for lead ${lead_id}, reusing user ${userId}`);
+  } else {
+    userId = authData.user.id;
+  }
 
   // 3. Update user fields
   const userFields: Record<string, unknown> = { role: 'buyer' };
@@ -129,7 +161,10 @@ router.post('/user/account', wrap(async (req, res) => {
     .then(({ error }) => { if (error) console.warn('[db] create_user: lead converted flag failed (non-fatal):', error.message); });
 
   console.log(`[db] create_user: created user ${userId} from lead ${lead_id}`);
-  res.json({ status: 'success', response: { user_id: userId } });
+  // Issue a session token so the frontend can immediately make authenticated calls
+  // (e.g. buyer-info extraction in CheckoutComplete) without a separate login step.
+  const authToken = issueSessionToken(userId);
+  res.json({ status: 'success', response: { user_id: userId }, auth_token: authToken });
 }));
 
 // ── LEAD ──────────────────────────────────────────────────────────────────────
@@ -237,7 +272,7 @@ function buildLeadRecoveryHtml(opts: {
 }
 
 /** POST /api/bubble/lead/mail — send retention email to unconverted lead */
-router.post('/lead/mail', wrap(async (req, res) => {
+router.post('/lead/mail', requireAdmin, wrap(async (req, res) => {
   const { lead_id } = req.body as { lead_id?: string };
   if (!lead_id) { res.status(400).json({ error: 'lead_id required' }); return; }
 
@@ -446,7 +481,7 @@ You MUST return ALL of the following fields in every response:
 Return ONLY valid JSON with all 22 fields. No markdown, no explanation, no wrapping.`;
 
 /** POST /api/bubble/buyer-info/extract — fetch ElevenLabs transcript, extract buyer info, update buyer_info */
-router.post('/buyer-info/extract', wrap(async (req, res) => {
+router.post('/buyer-info/extract', requireAuth, wrap(async (req, res) => {
   const { userId, conversationId } = req.body as { userId?: string; conversationId?: string };
   if (!userId || !conversationId) {
     res.status(400).json({ error: 'userId and conversationId are required' });
@@ -590,6 +625,7 @@ router.post('/buyer-info/extract', wrap(async (req, res) => {
 
 /** GET /api/bubble/buyer-info/:userId — get buyer info for a user */
 router.get('/buyer-info/:userId', requireAuth, wrap(async (req, res) => {
+  if (!assertOwner(req, res)) return;
   const { data: info } = await supabase
     .from('buyer_info')
     .select('*')
@@ -605,6 +641,7 @@ router.get('/buyer-info/:userId', requireAuth, wrap(async (req, res) => {
 
 /** GET /api/bubble/matches/:userId — top matches with business details */
 router.get('/matches/:userId', requireAuth, wrap(async (req, res) => {
+  if (!assertOwner(req, res)) return;
   const { userId } = req.params;
 
   // Single query with join — replaces the N+1 pattern
@@ -690,6 +727,7 @@ router.get('/listings', requireAdmin, wrap(async (req, res) => {
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
 
 router.get('/settings/user/:userId', requireAuth, wrap(async (req, res) => {
+  if (!assertOwner(req, res)) return;
   const { data: u } = await supabase
     .from('users')
     .select('*')
@@ -701,6 +739,7 @@ router.get('/settings/user/:userId', requireAuth, wrap(async (req, res) => {
 }));
 
 router.patch('/settings/user/:userId', requireAuth, wrap(async (req, res) => {
+  if (!assertOwner(req, res)) return;
   const body = req.body as Record<string, unknown>;
 
   const allowedFields = ['name', 'langcliffe_connected', 'dealsuite_connected'];
@@ -717,6 +756,7 @@ router.patch('/settings/user/:userId', requireAuth, wrap(async (req, res) => {
 }));
 
 router.get('/settings/agent/:userId', requireAuth, wrap(async (req, res) => {
+  if (!assertOwner(req, res)) return;
   const { data: agents } = await supabase
     .from('agents')
     .select('*')
@@ -746,6 +786,7 @@ router.patch('/settings/agent/:agentId', requireAuth, wrap(async (req, res) => {
 }));
 
 router.get('/settings/buyer-info/:userId', requireAuth, wrap(async (req, res) => {
+  if (!assertOwner(req, res)) return;
   const { data: infos } = await supabase
     .from('buyer_info')
     .select('*')
@@ -758,12 +799,26 @@ router.get('/settings/buyer-info/:userId', requireAuth, wrap(async (req, res) =>
   });
 }));
 
+const BUYER_INFO_ALLOWED_FIELDS = new Set([
+  'buyer_type', 'buying_reason', 'buying_experience', 'decision_speed',
+  'industry_preferences', 'excluded_sectors', 'geography',
+  'turnover_range', 'ebitda_range', 'ebitda_margin_min', 'asset_base',
+  'valuation_range', 'deal_structure_preference', 'funding_source',
+  'business_age', 'employee_headcount', 'customer_base_type',
+  'contractual_recurrence', 'ip_technology', 'physical_digital',
+  'involvement', 'problems',
+]);
+
 router.patch('/settings/buyer-info/:buyerInfoId', requireAuth, wrap(async (req, res) => {
   const body = req.body as Record<string, unknown>;
 
-  // Pass through directly — frontend sends clean Supabase column names
-  if (Object.keys(body).length > 0) {
-    const { error } = await supabase.from('buyer_info').update(body).eq('id', req.params.buyerInfoId);
+  const update: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(body)) {
+    if (BUYER_INFO_ALLOWED_FIELDS.has(key)) update[key] = val;
+  }
+
+  if (Object.keys(update).length > 0) {
+    const { error } = await supabase.from('buyer_info').update(update).eq('id', req.params.buyerInfoId);
     if (error) throw error;
   }
   res.json({ ok: true });
@@ -790,6 +845,7 @@ router.get('/notifications/nda/:outreachId', requireAuth, wrap(async (req, res) 
 }));
 
 router.get('/notifications/:userId', requireAuth, wrap(async (req, res) => {
+  if (!assertOwner(req, res)) return;
   const { data: notifications } = await supabase
     .from('user_notification')
     .select('*')

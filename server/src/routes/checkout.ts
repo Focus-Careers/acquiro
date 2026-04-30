@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import Stripe from 'stripe';
 import { supabase } from '../lib/supabase.js';
+import { requireAuth } from '../middleware/requireAuth.js';
 
 const router = Router();
 
@@ -121,11 +122,22 @@ router.get('/session-status', async (req: Request, res: Response) => {
 });
 
 // Cancel subscription at period end (user keeps access until period end)
-router.post('/cancel-subscription', async (req: Request, res: Response) => {
+router.post('/cancel-subscription', requireAuth, async (req: Request, res: Response) => {
   try {
     const { subscriptionId } = req.body;
     if (!subscriptionId || typeof subscriptionId !== 'string') {
       return res.status(400).json({ error: 'subscriptionId is required' });
+    }
+
+    // Ownership check: verify the subscription_id in the DB matches the one being cancelled
+    const { data: user } = await supabase
+      .from('users')
+      .select('subscription_id')
+      .eq('id', req.userId)
+      .single();
+
+    if (!user?.subscription_id || user.subscription_id !== subscriptionId.trim()) {
+      return res.status(403).json({ error: 'Subscription does not belong to this account' });
     }
 
     const stripe = getStripe();

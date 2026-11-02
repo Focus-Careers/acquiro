@@ -1,62 +1,80 @@
 import { Router, Request, Response } from 'express';
+import { MODELS } from '../lib/models.js';
+import { AI_BASE_URL, AI_REPORTING_TAGS, aiApiKey } from '../lib/openai.js';
 
 const router = Router();
 
-// Models this proxy is allowed to call. Prevents callers from requesting
-// expensive models (e.g. o1, gpt-4-turbo) and draining OpenAI quota.
-const ALLOWED_MODELS = new Set([
-  'gpt-5-mini',
-  'gpt-4o-mini',
-  'gpt-4o',
-]);
+// Long enough for an advisor reply plus the model's reasoning, which counts against this budget;
+// short enough that one request can't be made into an essay-length bill.
+const MAX_OUTPUT_TOKENS = 8192;
+
+type ChatTurn = { role: 'user' | 'assistant'; content: string };
+
+function isChatTurns(value: unknown): value is ChatTurn[] {
+  return Array.isArray(value) && value.length > 0 && value.every((t) =>
+    t && typeof t === 'object'
+    && (t.role === 'user' || t.role === 'assistant')
+    && typeof t.content === 'string');
+}
 
 /**
  * POST /api/openai/stream
  *
- * Proxies a request to the OpenAI Responses API and pipes the SSE stream
- * back to the client. The API key never leaves the server.
+ * Streams an advisor reply from the Responses API back to the client as SSE. The key never leaves
+ * the server.
  *
- * Body: the full OpenAI Responses API payload (model, input, instructions, stream, etc.)
+ * Unauthenticated on purpose: the advisor builder at /builder is the public pre-signup flow. That
+ * is exactly why the caller does not get to shape the upstream request. Only the conversation
+ * (`input`) and the advisor brief (`instructions`) are taken from the body; the model, the output
+ * budget and everything else are set here. A caller who sends `model` gets the advisor's model
+ * regardless, so this cannot be used to reach an expensive one. Request size is already bounded by
+ * express.json()'s 100kb default, and the route sits behind aiLimiter.
  */
 router.post('/stream', async (req: Request, res: Response): Promise<void> => {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = aiApiKey();
   if (!apiKey) {
-    res.status(500).json({ error: 'OpenAI not configured on server' });
+    res.status(500).json({ error: 'AI not configured on server' });
     return;
   }
 
-  // Enforce model allowlist — reject anything outside the approved set
-  const requestedModel = req.body?.model as string | undefined;
-  if (!requestedModel || !ALLOWED_MODELS.has(requestedModel)) {
-    res.status(400).json({ error: `Model not allowed. Permitted: ${[...ALLOWED_MODELS].join(', ')}` });
+  const { input, instructions } = (req.body ?? {}) as { input?: unknown; instructions?: unknown };
+  if (!isChatTurns(input) || typeof instructions !== 'string' || !instructions.trim()) {
+    res.status(400).json({ error: 'Expected { input: [{ role, content }], instructions: string }' });
     return;
   }
 
   let upstreamRes: globalThis.Response;
   try {
-    upstreamRes = await fetch('https://api.openai.com/v1/responses', {
+    upstreamRes = await fetch(`${AI_BASE_URL}/responses`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
+        'ai-reporting-tags': AI_REPORTING_TAGS,
       },
-      body: JSON.stringify(req.body),
+      body: JSON.stringify({
+        model: MODELS.standard,
+        input,
+        instructions,
+        stream: true,
+        max_output_tokens: MAX_OUTPUT_TOKENS,
+      }),
     });
   } catch (err) {
-    console.error('[openai proxy] Fetch error:', err);
-    res.status(502).json({ error: 'Failed to reach OpenAI' });
+    console.error('[ai proxy] Fetch error:', err);
+    res.status(502).json({ error: 'Failed to reach the model' });
     return;
   }
 
   if (!upstreamRes.ok) {
     const text = await upstreamRes.text().catch(() => '');
-    console.error(`[openai proxy] OpenAI error ${upstreamRes.status}:`, text.substring(0, 200));
+    console.error(`[ai proxy] Upstream error ${upstreamRes.status}:`, text.substring(0, 200));
     res.status(upstreamRes.status).send(text);
     return;
   }
 
   if (!upstreamRes.body) {
-    res.status(502).json({ error: 'Empty response body from OpenAI' });
+    res.status(502).json({ error: 'Empty response body from the model' });
     return;
   }
 
@@ -76,7 +94,7 @@ router.post('/stream', async (req: Request, res: Response): Promise<void> => {
       res.write(decoder.decode(value, { stream: true }));
     }
   } catch (err) {
-    console.error('[openai proxy] Stream error:', err);
+    console.error('[ai proxy] Stream error:', err);
   } finally {
     reader.releaseLock();
     res.end();

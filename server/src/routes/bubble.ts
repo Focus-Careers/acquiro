@@ -9,7 +9,8 @@
  */
 
 import { Router, Request, Response } from 'express';
-import OpenAI from 'openai';
+import { ai } from '../lib/openai.js';
+import { MODELS } from '../lib/models.js';
 import jwt from 'jsonwebtoken';
 import { supabase } from '../lib/supabase.js';
 import { requireAuth, requireAdmin } from '../middleware/requireAuth.js';
@@ -206,13 +207,10 @@ router.post('/lead', wrap(async (req, res) => {
 // ── Lead recovery email helpers ───────────────────────────────────────────────
 
 async function generateLeadRecoveryEmail(agentName: string, userName: string | null): Promise<string> {
-  const openaiKey = process.env.OPENAI_API_KEY;
-  if (!openaiKey) throw new Error('OPENAI_API_KEY not configured');
-
-  const client = new OpenAI({ apiKey: openaiKey });
+  const client = ai();
   const addressee = userName ?? 'there';
   const completion = await client.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: MODELS.fast,
     messages: [
       {
         role: 'user',
@@ -566,9 +564,8 @@ router.post('/buyer-info/extract', requireAuth, wrap(async (req, res) => {
   };
 
   // 4. Extract with OpenAI
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const aiRes = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+  const aiRes = await ai().chat.completions.create({
+    model: MODELS.fast,
     response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: BUYER_INFO_EXTRACTION_PROMPT },

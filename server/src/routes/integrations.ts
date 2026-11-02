@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { promises as dns } from 'dns';
-import OpenAI from 'openai';
+import { ai } from '../lib/openai.js';
+import { MODELS } from '../lib/models.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
 const router = Router();
@@ -80,11 +81,9 @@ router.post('/summarise-website', requireAuth, async (req, res) => {
     return res.status(422).json({ error: 'Could not extract readable content from the website' });
   }
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
   try {
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+    const completion = await ai().chat.completions.create({
+      model: MODELS.fast,
       messages: [
         {
           role: 'system',

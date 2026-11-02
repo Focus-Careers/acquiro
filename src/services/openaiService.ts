@@ -61,12 +61,10 @@ export async function generateChatResponseStream(
       headers: {
         'Content-Type': 'application/json',
       },
+      // The server chooses the model and output budget; only the conversation and brief are ours.
       body: JSON.stringify({
-        model: 'gpt-5-mini',
         input: responseItems,
         instructions: systemPrompt,
-        stream: true,
-        temperature: 1,
       }),
     });
 
@@ -235,10 +233,8 @@ export async function generateOpeningMessage(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-5-mini',
         input,
         instructions,
-        stream: true,
       }),
     });
 

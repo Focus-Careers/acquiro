@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { promises as dns } from 'dns';
 import OpenAI from 'openai';
+import { requireAuth } from '../middleware/requireAuth.js';
 
 const router = Router();
 
@@ -22,8 +23,11 @@ function stripHtml(html: string): string {
  * POST /api/integrations/summarise-website
  * Body: { url: string }
  * Returns: { summary: string }
+ *
+ * Requires login. It fetches an arbitrary site and spends a model call on it, and the only caller
+ * (IntegrationsPage) sits behind DashboardGuard — so nobody legitimate is ever anonymous here.
  */
-router.post('/summarise-website', async (req, res) => {
+router.post('/summarise-website', requireAuth, async (req, res) => {
   const { url } = req.body as { url?: string };
 
   if (!url || typeof url !== 'string') {

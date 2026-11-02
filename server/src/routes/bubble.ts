@@ -31,6 +31,18 @@ function assertOwner(req: Request, res: Response): boolean {
   return true;
 }
 
+/**
+ * The same protection for routes keyed on a record id rather than :userId — a match, an agent, a
+ * buyer-info row, a notification. Those writes are scoped with .eq('user_id', req.userId) and
+ * .select('id'), and this answers 404 when nothing came back: another user's record and a missing
+ * one look identical, so ids can't be probed for existence.
+ */
+function foundOwnRow(rows: unknown[] | null, res: Response): boolean {
+  if (rows && rows.length > 0) return true;
+  res.status(404).json({ error: 'Not found' });
+  return false;
+}
+
 type Handler = (req: Request, res: Response) => Promise<void>;
 function wrap(handler: Handler) {
   return async (req: Request, res: Response) => {
@@ -679,8 +691,10 @@ router.patch('/matches/:matchId/dismiss', requireAuth, wrap(async (req, res) => 
   if (reason && allowedReasons.includes(reason)) {
     patch.dismiss_reason = reason;
   }
-  const { error } = await supabase.from('matches').update(patch).eq('id', req.params.matchId);
+  const { data, error } = await supabase.from('matches').update(patch)
+    .eq('id', req.params.matchId).eq('user_id', req.userId).select('id');
   if (error) throw error;
+  if (!foundOwnRow(data, res)) return;
   res.json({ ok: true });
 }));
 
@@ -779,8 +793,10 @@ router.patch('/settings/agent/:agentId', requireAuth, wrap(async (req, res) => {
   }
 
   if (Object.keys(update).length > 0) {
-    const { error } = await supabase.from('agents').update(update).eq('id', req.params.agentId);
+    const { data, error } = await supabase.from('agents').update(update)
+      .eq('id', req.params.agentId).eq('user_id', req.userId).select('id');
     if (error) throw error;
+    if (!foundOwnRow(data, res)) return;
   }
   res.json({ ok: true });
 }));
@@ -818,8 +834,10 @@ router.patch('/settings/buyer-info/:buyerInfoId', requireAuth, wrap(async (req, 
   }
 
   if (Object.keys(update).length > 0) {
-    const { error } = await supabase.from('buyer_info').update(update).eq('id', req.params.buyerInfoId);
+    const { data, error } = await supabase.from('buyer_info').update(update)
+      .eq('id', req.params.buyerInfoId).eq('user_id', req.userId).select('id');
     if (error) throw error;
+    if (!foundOwnRow(data, res)) return;
   }
   res.json({ ok: true });
 }));
@@ -827,10 +845,13 @@ router.patch('/settings/buyer-info/:buyerInfoId', requireAuth, wrap(async (req, 
 // ── NOTIFICATIONS ─────────────────────────────────────────────────────────────
 
 router.get('/notifications/nda/:outreachId', requireAuth, wrap(async (req, res) => {
+  // Scoped to the caller: another user's outreach reads exactly like one with no NDA, so a
+  // confidential buyer-seller document can't be fetched by guessing its outreach id.
   const { data } = await supabase
     .from('langcliffe_outreach')
     .select('nda_file')
     .eq('id', req.params.outreachId)
+    .eq('user_id', req.userId)
     .single();
 
   const path = data?.nda_file ?? null;
@@ -861,11 +882,14 @@ router.get('/notifications/:userId', requireAuth, wrap(async (req, res) => {
 }));
 
 router.patch('/notifications/:notificationId/action', requireAuth, wrap(async (req, res) => {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('user_notification')
     .update({ status: 'actioned' })
-    .eq('id', req.params.notificationId);
+    .eq('id', req.params.notificationId)
+    .eq('user_id', req.userId)
+    .select('id');
   if (error) throw error;
+  if (!foundOwnRow(data, res)) return;
   res.json({ ok: true });
 }));
 

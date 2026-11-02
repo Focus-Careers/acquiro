@@ -7,7 +7,6 @@ import { dirname, resolve } from 'path';
 import checkoutRoutes from './routes/checkout.js';
 import adminRoutes from './routes/admin.js';
 import integrationsRoutes from './routes/integrations.js';
-import emailRoutes from './routes/email.js';
 import authRoutes from './routes/auth.js';
 import bubbleRoutes from './routes/bubble.js';
 import openaiRoutes from './routes/openai.js';
@@ -30,6 +29,7 @@ dotenv.config();
 
 // Validate required environment variables (skip on Vercel build if not set yet)
 const requiredEnvVars = [
+  'JWT_SECRET',
   'STRIPE_SECRET_KEY',
   'STRIPE_PROFESSIONAL_MONTHLY_PRICE_ID',
   'STRIPE_PROFESSIONAL_ANNUAL_PRICE_ID',
@@ -42,8 +42,12 @@ if (missingVars.length > 0 && process.env.VERCEL !== '1') {
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
+// CORS restrains browsers and nothing else: any non-browser client can send whatever Origin header
+// it likes, so refusing requests that carry none is not access control — requireAuth is. Refusing
+// them does break every legitimate server-to-server caller, Stripe's webhook first among them, so a
+// missing Origin is allowed through and left to the route's own auth.
 function isAllowedOrigin(origin: string | undefined): boolean {
-  if (!origin) return false; // non-browser clients (curl, Postman) blocked — not a legitimate CORS origin
+  if (!origin) return true;
   if (origin === FRONTEND_URL) return true;
   if (origin === 'https://acquirolabs.vercel.app') return true;
   // endsWith prevents substring-injection (e.g. evil-acquirolabs.vercel.app.attacker.com)
@@ -85,8 +89,10 @@ app.use(
       if (isAllowedOrigin(origin)) {
         cb(null, true);
       } else {
+        // No CORS headers, so the browser refuses the response. Passing an Error instead would
+        // reach the error handler and answer 500 to every cross-site preflight.
         console.warn('[CORS] Rejected origin:', origin);
-        cb(new Error('Not allowed by CORS'));
+        cb(null, false);
       }
     },
     credentials: true,
@@ -108,7 +114,6 @@ app.get('/health', (req, res) => {
 app.use('/api/checkout', checkoutRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/integrations', integrationsRoutes);
-app.use('/api/email', emailRoutes);
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/bubble', bubbleRoutes);
 app.use('/api/openai', aiLimiter, openaiRoutes);

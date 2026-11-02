@@ -9,6 +9,10 @@
 
 import { Router, Request, Response } from 'express';
 import { requireAdmin, requireAuth } from '../middleware/requireAuth.js';
+import { supabase } from '../lib/supabase.js';
+
+// A signed NDA is a document, not a dataset. Anything larger is refused before it is buffered.
+const MAX_NDA_BYTES = 10 * 1024 * 1024;
 
 const router = Router();
 
@@ -94,13 +98,39 @@ router.post('/outreach/:outreachId/signed-nda', requireAuth, async (req: Request
   const base = getScraperBase();
   const { outreachId } = req.params;
 
-  // Collect the raw request body chunks and forward with original Content-Type
+  // The scraper call below carries the ADMIN key, so the scraper will act on any outreach it is
+  // given. Ownership has to be settled here, before anything is forwarded: the caller may only
+  // attach an NDA to their own outreach. A foreign id answers 404, the same as a missing one.
+  const { data: owned } = await supabase
+    .from('langcliffe_outreach')
+    .select('id')
+    .eq('id', outreachId)
+    .eq('user_id', req.userId)
+    .maybeSingle();
+  if (!owned) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+
+  // Collect the raw request body chunks and forward with original Content-Type. Past the cap the
+  // chunks are dropped rather than kept, but the stream is still read to the end before answering:
+  // responding mid-upload leaves a client that is still sending unable to read the reply.
+  // (On Vercel the platform's own 4.5MB body limit applies first; this bounds memory elsewhere.)
   const chunks: Buffer[] = [];
+  let received = 0;
   await new Promise<void>((resolve, reject) => {
-    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('data', (chunk: Buffer) => {
+      received += chunk.length;
+      if (received <= MAX_NDA_BYTES) chunks.push(chunk);
+      else chunks.length = 0;
+    });
     req.on('end', resolve);
     req.on('error', reject);
   });
+  if (received > MAX_NDA_BYTES) {
+    res.status(413).json({ error: 'File too large' });
+    return;
+  }
   const body = Buffer.concat(chunks);
 
   const upstream = await fetch(`${base}/user/outreach/${outreachId}/signed-nda`, {

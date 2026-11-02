@@ -4,6 +4,7 @@ import { ArrowLeft, Copy, Check, ExternalLink, Loader2, Sparkles } from 'lucide-
 import { useAdvisorStore } from '../../hooks/useAdvisorStore';
 import { getMyAgent, getMyBuyerInfo, updateBuyerInfo, getUserProfile, updateUserProfile } from '../../services/settingsService';
 import { API_URL } from '../../utils/apiUrl';
+import { getAuthHeaders } from '../../utils/authHeaders';
 import langcliffeLogo from '../../assets/langcliffe-logo.png';
 import dealsuitelogo from '../../assets/dealsuite-logo.png';
 
@@ -89,7 +90,7 @@ function LangcliffeSetup({ userId, connected, onMarkConnected, markingConnected 
     try {
       const res = await fetch(`${API_URL}/api/integrations/summarise-website`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ url: websiteUrl.trim() }),
       });
       const json = await res.json();

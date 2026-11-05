@@ -14,7 +14,9 @@
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Read(//c/Users/toby/Downloads/**)",
+      "Bash(powershell -command \"Expand-Archive -Path 'Acquiro Origination-handoff.zip' -DestinationPath 'acquiro-origination-handoff' -Force\")"
     ]
   }
 }
